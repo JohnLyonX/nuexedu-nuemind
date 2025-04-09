@@ -1,0 +1,21 @@
+引入 npm install axios vue-router bootstrap file-saver
+
+router/index.js
+
+main.js
+
+/components/TypingEffect
+
+/components/NavComponent
+全面
+\src\views\course
+
+全面
+\src\assets\coursestadys
+
+-----
+登錄頁面
+\src\views\login
+
+-------
+
