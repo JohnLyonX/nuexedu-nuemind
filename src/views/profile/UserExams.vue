@@ -1,88 +1,59 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import request from '@/utils/request'
+import { saveAs } from 'file-saver'
 
 const router = useRouter()
 const exams = ref([])
 const loading = ref(true)
 const error = ref(null)
-
+const selectedFile = ref(null)
+const uploadStatus = ref('')
+const uploadProgress = ref(0)
 // 获取考试列表
 const fetchExams = async () => {
-  loading.value = true
-  error.value = null
-  
   try {
-    // 实际项目中应该从API获取数据
-    // const response = await fetch('http://localhost:1024/dev-api/edu/user/exams')
-    // const data = await response.json()
-    // exams.value = data.data
-    
-    // 使用假数据
-    setTimeout(() => {
-      exams.value = [
-        {
-          id: 1,
-          title: 'C语言进阶课程 - 期中考试',
-          course: 'C语言进阶课程',
+    const examsResp = await request.get('edu/coursesExam/list');
+    const submissionsResp = await request.get('edu/examFilelib/list', {
+      params: { studentId: localStorage.getItem('studentId') }
+    });
+    if (examsResp.data.code === 200 && submissionsResp.data.code === 200) {
+      exams.value = examsResp.data.rows.map(exam => {
+        // Find matching submission
+        const submission = submissionsResp.data.rows.find(
+          s => s.coursesExamName === exam.name
+        );
+
+        return {
+          id: exam.id,
+          title: exam.name,
+          course: exam.coursesName || '未指定课程',
+          selectedFile: null,
+          uploadStatus: '',
+          uploadProgress: 0,
           examTime: '2023-05-15 14:30',
           duration: 90,
           totalScore: 100,
-          score: 85,
-          status: 'completed',
-          analysis: {
+          score: submission?.score || '0',
+          status: submission
+            ? (submission.correctPath ? 'completed' : 'waiting_for_review')
+            : 'not_started',
+          analysis: submission?.correctPath ? {
             correct: 17,
             wrong: 3,
             partial: 0,
             accuracy: 85
-          }
-        },
-        {
-          id: 2,
-          title: 'C语言进阶课程 - 指针与内存管理测试',
-          course: 'C语言进阶课程',
-          examTime: '2023-05-10 10:15',
-          duration: 60,
-          totalScore: 100,
-          score: 92,
-          status: 'completed',
-          analysis: {
-            correct: 18,
-            wrong: 1,
-            partial: 1,
-            accuracy: 92
-          }
-        },
-        {
-          id: 3,
-          title: 'C语言进阶课程 - 函数与结构体测试',
-          course: 'C语言进阶课程',
-          examTime: '2023-05-05 09:30',
-          duration: 60,
-          totalScore: 100,
-          score: 78,
-          status: 'completed',
-          analysis: {
-            correct: 15,
-            wrong: 4,
-            partial: 1,
-            accuracy: 78
-          }
-        },
-        {
-          id: 4,
-          title: 'C语言进阶课程 - 期末模拟考试',
-          course: 'C语言进阶课程',
-          examTime: '2023-05-20 09:00',
-          duration: 120,
-          totalScore: 100,
-          score: null,
-          status: 'not_started',
-          analysis: null
-        }
-      ]
-      loading.value = false
-    }, 1000)
+          } : null,
+          fileUrl: exam.fileUrl,
+          // Add submission data
+          submission: submission || null
+        };
+      });
+    }
+    loading.value = false
+
+    window.scrollTo(0, 0)
   } catch (err) {
     error.value = '获取考试数据失败，请稍后重试'
     loading.value = false
@@ -90,10 +61,144 @@ const fetchExams = async () => {
   }
 }
 
-// 查看考试详情
-const viewExamDetail = (examId) => {
-  router.push(`/exam/${examId}`)
+const startExam = (exam) => {
+  const buttonStatus = getButtonStatus(exam);
+  router.push({
+    name: 'ExamPage',
+    params: {
+      examId: exam.id
+    },
+    query: {
+      ...(buttonStatus.status === 2 ? {
+        correctPath: exam.submission?.correctPath,
+        subPath: exam.submission?.subPath
+      }: buttonStatus.status === 1 ? {
+        subPath: exam.submission?.subPath,
+        fileUrl: exam.fileUrl
+      } : {
+        fileUrl: exam.fileUrl
+      }),
+      title: exam.title,
+      courseName: exam.course || null ,
+
+    }
+  });
 }
+// 下载文件
+const handleDownload = async (url) => {
+  try {
+    const fullUrl = url.startsWith('http') ? url : `http://localhost/dev-api/${url}`;
+    // const fullUrl = url.startsWith('http') ? url : `http://localhost/prod-api/${url}`;
+    // const fullUrl = url.startsWith('http') ? url : `http://nuemind.nuex.ltd/prod-api/${url}`;
+    const response = await request.get(fullUrl, {
+      responseType: 'blob'
+    });
+    saveAs(response.data, url.split('/').pop());
+  } catch (error) {
+    console.error('下载文件失败:', error);
+    alert('下载文件失败，请重试。');
+  }
+};
+// 获取文件名
+const getFileName = (path) => {
+  return path.split('/').pop();
+};
+
+// 显示文件输入框
+const showFileInput = (exam) => {
+  exam.selectedFile = null;
+  const fileInput = document.querySelector(`input[type="file"][data-exam-id="${exam.id}"]`);
+  if (fileInput) {
+    fileInput.value = '';
+    fileInput.click();
+  }
+};
+
+// 重置文件输入
+const resetFileInput = (exam) => {
+  exam.selectedFile = null;
+  exam.uploadStatus = '';
+  exam.uploadProgress = 0;
+  const fileInput = document.querySelector(`input[type="file"][data-exam-id="${exam.id}"]`);
+  if (fileInput) fileInput.value = '';
+};// 选择文件
+const handleFileSelect = (e, exam) => {
+  const file = e.target.files[0];
+  if (file) {
+    if (file.size > 10 * 1024 * 1024) {
+      alert('文件大小不能超过10MB');
+      resetFileInput(exam);
+      return;
+    }
+    exam.selectedFile = file;
+    exam.uploadStatus = '准备上传：' + file.name;
+  }
+};
+
+// 执行上传
+const handleUpload = async (exam) => {
+  if (!exam.selectedFile) return alert('请先选择文件');
+  const formData = new FormData();
+  formData.append('file', exam.selectedFile);
+  try {
+    const uploadResp = await request.post('common/upload', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      },
+      onUploadProgress: progressEvent => {
+        exam.uploadProgress = Math.round(
+          (progressEvent.loaded * 100) / progressEvent.total
+        );
+      }
+    });
+
+    if (uploadResp.data.code !== 200) {
+      throw new Error(uploadResp.data.msg || '上传失败');
+    }
+
+    const filePath = uploadResp.data.fileName;
+    console.log(filePath);
+    const updateData = {
+      studentId: localStorage.getItem('studentId'),
+      name: localStorage.getItem('name'),
+      coursesExamName: exam.title,
+      subPath: filePath
+    };
+    if (exam.submission?.id) {
+      updateData.id = exam.submission.id;
+    } else {
+      // For new submissions, include additional fields
+      updateData.coursesChapter = "Java章节二";
+      updateData.coursesId = 1;
+      updateData.coursesName = 'Java面向对象编程';
+      updateData.courseChapterId = 2;
+    }
+
+    // 第二步：调用数据库更新接口
+    const updateResp = await request.post('edu/examFilelib', updateData, {
+      headers: {
+        'Content-Type': 'application/json;charset=UTF-8'
+      }
+    });
+
+    if (updateResp.data.code === 200) {
+      exam.uploadStatus = exam.submission ? '文件更新成功！' : '上传成功！';
+      resetFileInput(exam);
+      await fetchExams(); // Refresh data
+    } else {
+      throw new Error(updateResp.data.msg || '更新数据库失败');
+    }
+  } catch (error) {
+    exam.uploadStatus = `上传失败: ${error.message}`;
+    console.error('上传错误:', error);
+  } finally {
+    setTimeout(() => {
+      exam.uploadProgress = 0;
+      exam.uploadStatus = '';
+    }, 6000);
+  }
+};
+
 
 // 格式化日期时间
 const formatDate = (dateStr) => {
@@ -113,9 +218,25 @@ const getStatusLabel = (status) => {
   const statusMap = {
     'not_started': { label: '未开始', color: '#999' },
     'in_progress': { label: '进行中', color: '#1890ff' },
-    'completed': { label: '已完成', color: '#52c41a' }
+    'completed': { label: '已完成', color: '#52c41a' },
+    'waiting_for_review': { label: '等待老师批改', color: '#faad14' }
   }
   return statusMap[status] || { label: '未知', color: '#999' }
+}
+
+// 获取按钮状态
+const getButtonStatus = (exam) => {
+  if (!exam.submission) {
+    return { status: 0, label: '开始考试' };
+  } else if (exam.submission && !exam.submission.correctPath) {
+    return { status: 1, label: '等待老师批改' };
+  } else {
+    return {
+      status: 2,
+      label: '查看分析',
+
+    };
+  }
 }
 
 onMounted(() => {
@@ -125,7 +246,7 @@ onMounted(() => {
 
 <template>
   <div class="user-exams">
-    <h2 class="page-title">考试分析</h2>
+    <h2 class="page-title">我的考试</h2>
 
     <!-- 加载状态 -->
     <div v-if="loading" class="loading-state">
@@ -145,7 +266,7 @@ onMounted(() => {
           <h3 class="exam-title">{{ exam.title }}</h3>
           <span class="exam-course">{{ exam.course }}</span>
         </div>
-        
+
         <div class="exam-info">
           <div class="info-item">
             <span class="info-label">考试时间:</span>
@@ -170,9 +291,9 @@ onMounted(() => {
             </span>
           </div>
         </div>
-        
+
         <!-- 考试分析 -->
-        <div v-if="exam.status === 'completed' && exam.analysis" class="exam-analysis">
+        <!-- <div v-if="exam.status === 'completed' && exam.analysis" class="exam-analysis">
           <h4 class="analysis-title">考试分析</h4>
           <div class="analysis-stats">
             <div class="stat-item correct">
@@ -192,15 +313,71 @@ onMounted(() => {
               <span class="stat-label">正确率</span>
             </div>
           </div>
-        </div>
-        
+        </div> -->
+
         <div class="exam-footer">
-          <button 
-            class="action-btn" 
-            :class="{ 'start-btn': exam.status === 'not_started' }"
-            @click="viewExamDetail(exam.id)"
+          <!-- <div class="upload-section">
+            <template v-if="exam.status === 'waiting_for_review' && exam.submission?.subPath">
+              <div class="submitted-file">
+                <span>已提交文件: {{ getFileName(exam.submission.subPath) }}</span>
+                <button @click="handleDownload(exam.submission.subPath)" class="download-btn">下载</button>
+                <button @click="showFileInput(exam)" class="update-btn">更新文件</button>
+              </div>
+              <input
+                type="file"
+                class="file-input"
+                @change="(e) => handleFileSelect(e, exam)"
+                style="display: none;"
+                :data-exam-id="exam.id"
+              />
+              <button
+                v-if="exam.selectedFile"
+                class="upload-submit-btn"
+                @click="handleUpload(exam)"
+              >
+                确认更新
+              </button>
+            </template>
+            <template v-else>
+              <label class="upload-btn">
+                选择文件
+                <input
+                  type="file"
+                  class="file-input"
+                  @change="(e) => handleFileSelect(e, exam)"
+                  style="display: none;"
+                  :data-exam-id="exam.id"
+                />
+              </label>
+              <button
+                class="upload-submit-btn"
+                @click="handleUpload(exam)"
+                :disabled="!exam.selectedFile"
+              >
+                上传答案
+              </button>
+            </template>
+            <div v-if="exam.uploadStatus" class="upload-status">
+              {{ exam.uploadStatus }}
+              <div v-if="exam.uploadProgress > 0" class="progress-bar">
+                <div
+                  class="progress"
+                  :style="{ width: exam.uploadProgress + '%' }"
+                ></div>
+              </div>
+            </div>
+          </div> -->
+          <!-- 按钮 -->
+          <button
+            class="action-btn"
+            :class="{
+              'start-btn': getButtonStatus(exam).status === 0,
+              'waiting-btn': getButtonStatus(exam).status === 1,
+              'view-btn': getButtonStatus(exam).status === 2
+            }"
+            @click="getButtonStatus(exam).action ? getButtonStatus(exam).action() : startExam(exam)"
           >
-            {{ exam.status === 'not_started' ? '开始考试' : '查看详情' }}
+            {{ getButtonStatus(exam).label }}
           </button>
         </div>
       </div>
@@ -373,9 +550,72 @@ onMounted(() => {
 .exam-footer {
   display: flex;
   justify-content: flex-end;
+
+  align-items: center;
   margin-top: 16px;
   padding-top: 16px;
   border-top: 1px solid #f0f0f0;
+}
+.upload-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 200px;
+}
+
+.upload-btn {
+  padding: 8px 16px;
+  background: #f0f0f0;
+  color: #333;
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: center;
+  transition: all 0.3s ease;
+  border: 1px solid #d9d9d9;
+}
+
+.upload-btn:hover {
+  background: #e6e6e6;
+}
+
+.upload-submit-btn {
+  padding: 8px 16px;
+  background: #722ed1;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.upload-submit-btn:hover {
+  background: #9254de;
+}
+
+.upload-submit-btn:disabled {
+  background: #d3adf7;
+  cursor: not-allowed;
+}
+
+.upload-status {
+  font-size: 12px;
+  color: #666;
+  margin-top: 4px;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 6px;
+  background: #f0f0f0;
+  border-radius: 3px;
+  margin-top: 4px;
+  overflow: hidden;
+}
+
+.progress {
+  height: 100%;
+  background: #52c41a;
+  transition: width 0.3s ease;
 }
 
 .action-btn {
@@ -401,6 +641,47 @@ onMounted(() => {
   background: #73d13d;
 }
 
+.waiting-btn {
+  background: #faad14;
+}
+
+.waiting-btn:hover {
+  background: #ffc53d;
+}
+.submitted-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.download-btn, .update-btn {
+  padding: 4px 8px;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.download-btn {
+  background: #1890ff;
+  color: white;
+}
+
+.download-btn:hover {
+  background: #40a9ff;
+}
+
+.update-btn {
+  background: #faad14;
+  color: white;
+}
+
+.update-btn:hover {
+  background: #ffc53d;
+}
 /* 深色模式适配 */
 @media (prefers-color-scheme: dark) {
   .page-title {
@@ -442,6 +723,19 @@ onMounted(() => {
 
   .exam-footer {
     border-top-color: #404040;
+  }
+  .upload-btn {
+    background: #363636;
+    color: #e0e0e0;
+    border-color: #555;
+  }
+
+  .upload-btn:hover {
+    background: #404040;
+  }
+
+  .progress-bar {
+    background: #404040;
   }
 }
 

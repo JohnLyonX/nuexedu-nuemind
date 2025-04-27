@@ -1,7 +1,7 @@
 <script setup>
 import {ref, onMounted} from 'vue'
 import {useRouter} from 'vue-router'
-
+import request from '@/utils/request'
 const router = useRouter()
 const courses = ref([])
 const loading = ref(true)
@@ -14,37 +14,22 @@ const fetchCourses = async () => {
 
   try {
     // 实际项目中应该从API获取数据
-    const response = await fetch('http://localhost:1024/dev-api/edu/courses/list')
-    const data = await response.json()
-    console.log(data)
-    courses.value = data.rows || []
-    // 使用假数据
-    setTimeout(() => {
-      courses.value = [
-        {
-          id: courses.value[0].id,
-          name: courses.value[0].name,
-          teacher: '梁工',
-          url: courses.value[0].url,
-          progress: 75,
-          status: 'learning',
-        },
-        {
-          id: courses.value[1].id,
-          name: courses.value[1].name,
-          teacher: '梁工',
-          url: courses.value[1].url,
-          progress: 30,
-          status: 'learning',
-        },
-
-      ]
-      loading.value = false
-    }, 1000)
+    const response = await request.get(`edu/courses/list`)
+    
+    courses.value = (response.data.rows || []).filter(course => course.status === 1).map(course => ({
+      id: course.id,
+      name: course.name,
+      teacher: course.teacherName || '未知教师',
+      url: course.url,
+      progress: course.progress || 0,
+      status: course.status 
+    }))
   } catch (err) {
     error.value = '获取课程数据失败，请稍后重试'
-    loading.value = false
     console.error('获取课程数据失败:', err)
+  } finally {
+    loading.value = false
+    window.scrollTo(0, 0) // 新增：数据加载完成后滚动到顶部
   }
 }
 
@@ -56,9 +41,9 @@ const continueLearning = (courseId) => {
 // 获取状态标签和颜色
 const getStatusInfo = (status) => {
   const statusMap = {
-    'not_started': {label: '未开始', color: '#999'},
-    'learning': {label: '学习中', color: '#1890ff'},
-    'completed': {label: '已完成', color: '#52c41a'}
+    0: {label: '未开始', color: '#999'},
+    1: {label: '学习中', color: '#1890ff'},
+    2: {label: '已完成', color: '#52c41a'}
   }
   return statusMap[status] || {label: '未知', color: '#999'}
 }
@@ -109,10 +94,10 @@ onMounted(() => {
             </span>
             <button
                 class="continue-btn"
-                :class="{ disabled: course.status === 'completed' }"
+                :class="{ disabled: course.status === 2 }"
                 @click="continueLearning(course.id)"
             >
-              {{ course.status === 'completed' ? '查看课程' : '继续学习' }}
+              {{ course.status === 2 ? '查看课程' : '继续学习' }}
             </button>
           </div>
         </div>

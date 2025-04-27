@@ -5,16 +5,17 @@ import { useRouter, useRoute } from 'vue-router'
 const router = useRouter()
 const route = useRoute()
 
+
 // 用户信息
 const userInfo = ref({
-  avatar: 'https://picsum.photos/200',
-  name: '梁展波',
+  avatar: localStorage.getItem('avatarUrl') || '/src/assets/aw.jpeg',
+  name: localStorage.getItem('name') || '  ', // 添加默认值"用户"
   role: '学生'
 })
 
 // 导航菜单配置
 const navMenus = [
-  { 
+  {
     key: 'profile',
     label: '个人档案',
     icon: '👤'
@@ -24,14 +25,14 @@ const navMenus = [
     label: '我的课程',
     icon: '📚'
   },
-  {
-    key: 'exercises',
-    label: '我的练习',
-    icon: '✏️'
-  },
+  // {
+  //   key: 'exercises',
+  //   label: '我的练习',
+  //   icon: '✏️'
+  // },
   {
     key: 'exams',
-    label: '考试分析',
+    label: '我的考试',
     icon: '📊'
   },
   // {
@@ -100,7 +101,7 @@ const handleMenuClick = (key) => {
 }
 
 .nav-sidebar {
-    
+
   width: 240px;
   background-color: #fff;
   box-shadow: 2px 0 8px rgba(0,0,0,0.05);
@@ -285,4 +286,4 @@ const handleMenuClick = (key) => {
     justify-content: center;
   }
 }
-</style> 
+</style>

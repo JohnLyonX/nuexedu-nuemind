@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-
+import request from '@/utils/request'
 const route = useRoute()
 const courseId = route.params.id
 
@@ -50,14 +50,24 @@ const learningObjectives = [
 // 获取课程详情
 const fetchCourseDetail = async () => {
   try {
-    const response = await fetch(`http://localhost:1024/dev-api/edu/courses/${courseId}`)
-    if (!response.ok) {
-      throw new Error('获取课程详情失败')
+    const { data:response } = await request.get(`edu/courses/${courseId}`)
+
+    courseDetail.value = {
+      ...courseDetail.value,
+      id: response.data.id,
+      url: response.data.url,
+      name: response.data.name,
+      price: response.data.price,
+      teacherName: response.data.teacherName,
+      createTime: response.data.createTime,
+      status: response.data.status
     }
-    const data = await response.json()
-    courseDetail.value = { ...courseDetail.value, ...data.data }
   } catch (error) {
-    console.error('获取课程详情失败:', error)
+    console.error('获取课程详情失败:', 
+      error.response ? 
+      `状态码: ${error.response.status}，错误信息: ${error.response.data.message}` : 
+      error.message
+    )
   }
 }
 
@@ -107,23 +117,7 @@ onMounted(() => {
       </ul>
     </div>
 
-    <!-- 课程大纲
-    <div class="course-section">
-      <h2 class="section-title">课程大纲</h2>
-      <div class="course-outline">
-        <div v-for="(chapter, index) in courseOutline" :key="index" class="chapter">
-          <div class="chapter-header">
-            <h3 class="chapter-title">{{ chapter.title }}</h3>
-            <div class="chapter-info">
-              <span class="chapter-duration">{{ chapter.duration }}</span>
-              <span class="chapter-lessons">{{ chapter.lessons }}小节</span>
-              <span v-if="chapter.status" class="preview-badge">{{ chapter.status }}</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div> -->
-
+   
     <!-- 讲师介绍 -->
     <div class="course-section">
       <h2 class="section-title">讲师介绍</h2>
@@ -163,8 +157,8 @@ onMounted(() => {
 
     <!-- 底部操作栏 -->
     <div class="action-bar">
-      <div class="price">您已经购买本课程</div>
-      <button class="enroll-button"><router-link to="/courseStady">点击学习</router-link></button>
+      <div class="price">告知:"现所有课程免费学习！！！！"</div>
+      <button class="enroll-button"><router-link :to="`/courseStudy/${courseDetail.id}`">点击学习</router-link></button>
       <button class="preview-button">领取课件</button>
     </div>
   </div>

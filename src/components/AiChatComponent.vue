@@ -5,6 +5,7 @@ const messages = ref([]);
 const userInput = ref('');
 const chatBox = ref(null);
 
+
 // 自动滚动到底部
 const scrollToBottom = async () => {
   await nextTick();
@@ -16,20 +17,32 @@ const scrollToBottom = async () => {
 const handleStream = async (reader, id) => {
   const decoder = new TextDecoder();
   let messageBuffer = '';
+  let lastUpdateTime = 0;
+  let updateScheduled = false;
+  let shouldOptimize = false;
 
-  const readStream = async () => {
-    const { value, done } = await reader.read();
-    if (done) {
-      // 更新最终消息
-      const index = messages.value.findIndex(m => m.id === id);
-      if (index !== -1) {
-        messages.value[index].html = messageBuffer;
-      }
-      return;
+  const updateMessage = () => {
+    // 检测是否以<div开头
+    if (!shouldOptimize && messageBuffer.trim().startsWith('<div')) {
+      shouldOptimize = true;
     }
 
-    messageBuffer += decoder.decode(value, { stream: true });
+    if (shouldOptimize) {
+      const now = performance.now();
+      if (now - lastUpdateTime < 50 && !updateScheduled) {
+        updateScheduled = true;
+        requestAnimationFrame(() => {
+          updateScheduled = false;
+          doUpdate();
+        });
+        return;
+      }
+      lastUpdateTime = now;
+    }
+    doUpdate();
+  };
 
+  const doUpdate = () => {
     const existingIndex = messages.value.findIndex(m => m.id === id);
     if (existingIndex !== -1) {
       messages.value[existingIndex].content = messageBuffer;
@@ -40,17 +53,30 @@ const handleStream = async (reader, id) => {
         id: id
       });
     }
+  };
 
+  const readStream = async () => {
+    const { value, done } = await reader.read();
+    if (done) {
+      doUpdate();
+      await scrollToBottom();
+      return;
+    }
+
+    messageBuffer += decoder.decode(value, { stream: true });
+    updateMessage();
     await scrollToBottom();
-    readStream();
+    return await readStream();
   };
 
   await readStream();
 };
 
+const isAIResponding = ref(false); // 新增响应状态标志
+
 const sendMessage = async () => {
   const message = userInput.value.trim();
-  if (!message) return;
+  if (!message || isAIResponding.value) return; // 添加状态检查
 
   // 添加用户消息（保持不变）
   messages.value.push({
@@ -63,11 +89,13 @@ const sendMessage = async () => {
   await scrollToBottom();
 
   try {
+    isAIResponding.value = true; // 开始响应
     const id = Date.now();
-    const userId = 'nuecout1';
+    const userId = new Date().getSeconds(); // 获取当前小时(0-23)
     // 修改请求URL部分
     const response = await fetch(
-      `http://localhost:8081/api/aiAgent?userId=${encodeURIComponent(userId)}&message=${encodeURIComponent(message)}`,
+      `http://localhost:8081/api/butlerAgent4Student?userId=${encodeURIComponent(userId)}&message=${encodeURIComponent(message)}`,
+      // `http://nuemind.nuex.ltd:8081/api/butlerAgent4Student?userId=${encodeURIComponent(userId)}&message=${encodeURIComponent(message)}`,
       {
         method: 'GET',
         mode: 'cors',
@@ -90,40 +118,51 @@ const sendMessage = async () => {
       id: Date.now()
     });
     await scrollToBottom();
+  } finally {
+    isAIResponding.value = false; // 结束响应
+  }
+};
+
+const handleEnter = (e) => {
+  if (!e.isComposing && !e.repeat && !isAIResponding.value) { // 添加状态检查
+    sendMessage();
   }
 };
 </script>
-
 <template>
   <div class="chat-container">
     <div ref="chatBox" class="chat-box">
       <div
         v-for="(msg, index) in messages"
-        :key="msg.id"
-        :class="['message', msg.isUser ? 'user-message' : 'bot-message']"
+        :key="index"
+        :class="['message', msg.isUser ? 'user-message' : 'gpt-message']"
       >
         <div class="message-content">
-          {{ msg.content }}
-          <div v-if="!msg.isUser && index === messages.length - 1" class="typing-indicator">
-            <div class="dot"></div>
-            <div class="dot"></div>
-            <div class="dot"></div>
+          <div v-if="msg.isUser" class="user-content">
+            {{ msg.content }}
           </div>
+          <div v-else class="gpt-content" v-html="msg.content"></div>
         </div>
       </div>
     </div>
-    
     <div class="input-area">
       <div class="input-wrapper">
         <input
           v-model="userInput"
-          @keyup.enter="sendMessage"
-          placeholder="输入消息..."
+          @keydown.enter.prevent="handleEnter"
+          :readonly="isAIResponding"
+          placeholder="让我们来帮你..."
           class="message-input"
         />
-        <button @click="sendMessage" class="send-btn">
+        <button
+          @click="sendMessage"
+          class="send-btn"
+          :disabled="isAIResponding"
+          :style="{ opacity: isAIResponding ? 0.5 : 1 }"
+
+        >
           <svg class="send-icon" viewBox="0 0 24 24">
-            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+            <path fill="#ffffff" d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
           </svg>
         </button>
       </div>
@@ -132,13 +171,15 @@ const sendMessage = async () => {
 </template>
 
 <style scoped>
+/* 从AiChatComponent迁移的样式 */
 .chat-container {
-  height: 100vh;
   display: flex;
   flex-direction: column;
   background: #f5f6fa;
   border-radius: 16px;
   box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+  margin-top: 1rem;
+  height: 700px; /* 固定高度避免影响父布局 */
 }
 
 .chat-box {
@@ -163,7 +204,7 @@ const sendMessage = async () => {
   transform: translateX(4px);
 }
 
-.bot-message {
+.gpt-message {
   align-self: flex-start;
   animation: slideInLeft 0.3s ease;
 }
@@ -182,7 +223,7 @@ const sendMessage = async () => {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
-.bot-message .message-content {
+.gpt-message .message-content {
   background: white;
   color: #1a1a1a;
   border: 1px solid #eceef2;
@@ -252,29 +293,6 @@ const sendMessage = async () => {
   height: 20px;
 }
 
-/* 打字动画 */
-.typing-indicator {
-  display: flex;
-  gap: 6px;
-  padding: 12px 0 4px;
-}
-
-.dot {
-  width: 7px;
-  height: 7px;
-  background: #d3d8e4;
-  border-radius: 50%;
-  animation: bounce 1.4s infinite;
-}
-
-.dot:nth-child(2) { animation-delay: 0.2s; }
-.dot:nth-child(3) { animation-delay: 0.4s; }
-
-@keyframes bounce {
-  0%, 80%, 100% { transform: translateY(0); }
-  40% { transform: translateY(-6px); }
-}
-
 /* 消息入场动画 */
 @keyframes slideInLeft {
   from {
@@ -298,7 +316,7 @@ const sendMessage = async () => {
   }
 }
 
-/* 美化滚动条 */
+/* 滚动条美化 */
 .chat-box::-webkit-scrollbar {
   width: 8px;
 }
@@ -317,4 +335,3 @@ const sendMessage = async () => {
   background: #a8acb5;
 }
 </style>
-

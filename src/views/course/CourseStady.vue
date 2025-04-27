@@ -1,95 +1,112 @@
 <script setup>
-import { ref, computed } from 'vue';
+import { ref,onMounted,shallowRef, markRaw } from 'vue';
+import { useRoute } from 'vue-router';
 import VideoPage1 from '@/views/course/videopage/VideoPage1.vue';
 import VideoPage2 from '@/views/course/videopage/VideoPage2.vue';
 import ExamPage from '@/views/course/videopage/ExamPage.vue';
 import VideoPage3 from '@/views/course/videopage/VideoPage3.vue';
 import VideoPage4 from '@/views/course/videopage/VideoPage4.vue';
+import VideoPage5 from '@/views/course/videopage/VideoPage5.vue';
+import VideoPage6 from '@/views/course/videopage/VideoPage6.vue';
+import request from '@/utils/request'
+const route = useRoute();
+const courseId = route.params.courseId; // 从路由参数获取课程ID
 
-const modules = ref(['目录']);
-const activeModule = ref(0);
-const collapsedItems = ref([]);
-const directoryItems = ref([
-  // 目录
-  [
-    {
-      id: 1,
-      title: '1.编写Java程序',
-      children: [
-        {
-          id: 11,
-          title: '编写第一个Java程序',
-        },
-        {
-          id: 12,
-          title: '实现Java类继承、方法重载、重写',
-        },
-        {
-          id: 13,
-          title: '章节考试1',
-        }
-      ]
-    },
-    {
-      id: 2,
-      title: '2.GUI编程',
-      children: [
-        {
-          id: 21,
-          title: 'GUI布局管理',
-        },
-        {
-          id: 22,
-          title: 'Swing组件编程',
-        },
-        {
-          id: 23,
-          title: '章节考试2',
-        }
-      ]
-    }
-  ]
-]);
+// 目录数据状态
+const directoryItems = ref([]);
+const loading = ref(true);
+const collapsedItems = ref([]); // 存储被折叠的目录ID
+const currentVideoComponent = shallowRef(markRaw(VideoPage1));
+const courseDetails = ref({})
+const currentVideoUrl = ref('')|| ''
+const buildTree = (items, currentCourseId) => {
+  // 获取当前课程的所有章节
+  const courseChapters = items.filter(item => item.coursesId == currentCourseId);
+// 递归构建子章节树
+const buildChildren = (parentId) => {
+    return courseChapters
+      .filter(c => c.parentId === parentId)
+      .map(chapter => ({
+        id: chapter.id,
+        title: chapter.title,
+        children: buildChildren(chapter.id)
+      }));
+  };
+   // 获取顶层章节（parentId为0）
+   const topLevels = courseChapters.filter(c => c.parentId === 0);
+  
+  // 为每个顶层章节构建完整树结构
+  return topLevels.flatMap(root => buildChildren(root.id));
+  
+  
+};
+const fetchCourseDetails = async () => {
+  try {
+    const response = await request.get(`edu/courses/${courseId}`)
+    courseDetails.value = response.data.data
+  } catch (error) {
+    console.error('获取课程详情失败:', error)
+  }
+}
+const componentMap = {
+  // Java课程
+  8: markRaw(VideoPage1),  // GUI编程 -> 编写第一个Java程序
+  9: markRaw(VideoPage2), // GUI编程 -> 实现Java类继承
+  10: markRaw(VideoPage3), // Java章节二 -> GUI布局管理
+  11: markRaw(VideoPage4), // Java章节二 -> Swing组件编程
+  14: markRaw(ExamPage),
+  // C语言课程
+  12: markRaw(VideoPage5),  // C语言章节一 -> C语言介绍
+  13: markRaw(VideoPage6)  // C语言章节二 -> C语言基础语法
 
-const currentDirectoryItems = computed(() => {
-    return directoryItems.value[activeModule.value];
-});
 
-const switchVideo = (index) => {
-    activeModule.value = index;
-    if (index === 0) {
-        currentVideoComponent.value = VideoPage1;
-    }else if (index === 1) {
-        currentVideoComponent.value = VideoPage2;
-    }else if (index === 2) {
-        currentVideoComponent.value = ExamPage;
-    }
+};
+console.log(componentMap);
+
+// 获取目录数据
+const fetchDirectory = async () => {
+  try {
+    const response = await request.get('edu/coursesChapter/list');
+    // 传入当前课程ID进行过滤
+    directoryItems.value = buildTree(response.data.data, courseId);
+    console.log(`${courseId}目录数据:`, directoryItems.value);
+    
+  } catch (error) {
+    console.error('获取目录失败:', error);
+  } finally {
+    loading.value = false;
+  }
 };
 
-// 切换一级目录的展开和收起状态
-const toggleCollapse = (itemId) => {
-  const index = collapsedItems.value.indexOf(itemId);
+
+// 处理目录项点击
+const handleDirectoryItemClick = (chapterId) => {
+  console.log('当前点击的章节ID:', chapterId);
+  const detail = courseDetails.value.eduCoursesDetailsList?.find(
+    d => d.coursesChapterId === chapterId
+  )
+  console.log('课程详情列表:', courseDetails.value.eduCoursesDetailsList); 
+  if (detail) {
+    currentVideoUrl.value = detail.videoUrl
+    currentVideoComponent.value = componentMap[chapterId] || markRaw(VideoPage1)
+  }
+
+};
+
+onMounted(() => {
+  fetchDirectory();
+  fetchCourseDetails()
+});
+
+// 折叠切换方法
+const toggleCollapse = (id) => {
+  const index = collapsedItems.value.indexOf(id);
   if (index === -1) {
-    collapsedItems.value.push(itemId);
+    collapsedItems.value.push(id);
   } else {
     collapsedItems.value.splice(index, 1);
   }
 };
-
-const currentVideoComponent = ref(VideoPage1);
-// 添加对二级目录项的处理逻辑
-const handleDirectoryItemClick = (childId) => {
-  const componentMap = {
-    11: VideoPage1,
-    12: VideoPage2,
-    13: ExamPage,
-    21: VideoPage4,
-    22: VideoPage3,
-    23: ExamPage,
-  };
-  currentVideoComponent.value = componentMap[childId] || VideoPage1;
-};
-
 // 拖动功能相关代码
 const startResize = (e) => {
   const rightContainer = e.target.parentElement;
@@ -113,59 +130,40 @@ const startResize = (e) => {
 
 <template>
   <div id="app" class="app-container">
-    <!-- 右侧功能区（25%宽度） -->
+    <div v-if="loading" class="loading">加载目录中...</div>
+    
     <div class="right-container">
-      <div class="resize-handle" @mousedown="startResize"></div> <!-- 拖动区域保持不变 -->
-      <!-- 右侧顶部导航栏（占右侧区域25%高度） -->
+      <div class="resize-handle" @mousedown="startResize"></div>
       <div class="right-navbar">
-        <div
-            v-for="(module, index) in modules"
-            :key="index"
-            class="module-item"
-            :class="{ active: activeModule === index }"
-            @click="switchVideo(index)"
-        >
-          {{ module }}
-        </div>
+        <div class="module-item">目录</div>
       </div>
-
-      <!-- 右侧目录区（占右侧区域75%高度，可左右滚动） -->
+      
       <div class="directory-container">
-        <ul class="directory-list">
-          <li
-              v-for="item in currentDirectoryItems"
-              :key="item.id"
-              class="directory-item"
-          >
-            <div
-                class="item-title"
-                @click="toggleCollapse(item.id)"
-            >
-              <i class="fas fa-folder"></i> {{ item.title }}
+    <!-- 目录列表容器，用于展示目录项 -->
+    <ul v-if="!loading" class="directory-list">
+      <li v-for="section in directoryItems" :key="section.id" class="directory-item">
+        <div class="item-title" @click="toggleCollapse(section.id)">
+          <i class="fas fa-folder"></i> {{ section.title }}
+        </div>
+        
+        <ul v-if="section.children && !collapsedItems.includes(section.id)" class="sub-directory">
+          <li v-for="detail in section.children" 
+              :key="detail.id" 
+              class="sub-item"
+              @click="handleDirectoryItemClick(detail.id)">
+            <div class="item-title">
+              {{ detail.title }}
             </div>
-            <ul
-                v-if="item.children && !collapsedItems.includes(item.id)"
-                class="sub-directory"
-            >
-              <li v-for="child in item.children" :key="child.id" class="sub-item">
-                <div class="item-title" @click="handleDirectoryItemClick(child.id)">
-                  {{ child.title }}
-                </div>
-              </li>
-            </ul>
           </li>
         </ul>
-      </div>
+      </li>
+    </ul>
+</div>
     </div>
-    <!-- 左侧主内容区（75%宽度） -->
-    <component
-        :is="currentVideoComponent"
-        class="left-side"
-        :class="{'video-page-1': activeModule === 0, 'video-page-2': activeModule === 2}"
-    ></component>
+
+    <component :is="currentVideoComponent":videoUrl="currentVideoUrl" class="left-side"></component>
   </div>
 </template>
-
 <style>
 
 /* 全局布局 */
@@ -346,5 +344,16 @@ const startResize = (e) => {
   cursor: col-resize;
   background-color: #ccc;
 }
-
+/* 添加加载状态样式 */
+.loading {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 1rem 2rem;
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  border-radius: 4px;
+  z-index: 1000;
+}
 </style>

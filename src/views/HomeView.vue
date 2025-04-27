@@ -3,7 +3,7 @@ import { ref, onMounted } from 'vue'
 import { Swiper, SwiperSlide } from 'swiper/vue'
 import { Autoplay, Pagination, EffectFade } from 'swiper/modules'
 import CourseCard from '@/components/CourseCardComponents.vue'
-
+import request from '@/utils/request'
 // 直接导入 Swiper 样式（根据实际需求选择）
 import 'swiper/css'
 import 'swiper/css/pagination'
@@ -37,18 +37,25 @@ const error = ref(null)
 const fetchCourses = async () => {
   loading.value = true
   try {
-    const response = await fetch('http://localhost:1024/dev-api/edu/courses/list')
-    if (!response.ok) {
-      throw new Error(`请求失败: ${response.status}`)
-    }
-    const data = await response.json()
-    courses.value = data.rows || []
+    const response = await request.get('edu/courses/list', {
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    })
+    const { code, rows } = response.data
+
+    courses.value = rows.filter(course => course.status === 1).map(course => ({
+      id: course.id,
+      url: course.url,
+      name: course.name,
+      description: course.summary,
+      price: course.price,
+      teacher: course.teacherName,
+      status: course.status
+    }))
     loading.value = false
   } catch (err) {
-    console.error('获取课程数据失败:', err)
-    error.value = '加载课程数据失败，请稍后再试'
     loading.value = false
-
     // 加载失败时显示模拟数据
     courses.value = [
       {
@@ -155,29 +162,29 @@ onMounted(() => {
       <section style="margin-top: 8rem;">
         <p class="section-subtitle"
           style="margin: 0; font-weight: bold; font-size: 1.2rem; color: #2c3e50;; font-family: 'Goodly';">
-          不知如何选择？请让我们的智能销售 Alice 来帮助你</p>
+          不知如何选择？请让我们的智能销售客服 Alice 来帮助你</p>
         <SaleChatComponent />
       </section>
 
      <!-- 新增模块2：团队介绍 -->
 <section class="team-section">
   <div class="team-container">
-    <h2 class="section-title">活力团队</h2>
+    <h2 class="section-title">活力教师团队</h2>
     <p class="section-subtitle">年轻力量，创意无限</p>
 
     <div class="team-grid">
       <div class="team-card">
         <div class="team-image">
-          <img src="https://picsum.photos/300/300?random=4" alt="团队成员" class="team-img">
+          <img src="https://nuecount.oss-cn-guangzhou.aliyuncs.com/banner/2221745565190_.pic_hd.jpg" alt="团队成员" class="team-img">
         </div>
         <h3>梁工</h3>
-        <p class="team-title">AI设计师</p>
-        <p class="team-desc">智能算法爱好者，主导过多个校园AI项目，擅长将创新想法转化为可行解决方案。</p>
+        <p class="team-title">全栈开发工程师</p>
+        <p class="team-desc">全栈开发工程师、Java架构师、多年大厂开发经验</p>
       </div>
 
       <div class="team-card">
         <div class="team-image">
-          <img src="https://picsum.photos/300/300?random=5" alt="团队成员" class="team-img">
+          <img src="https://nuecount.oss-cn-guangzhou.aliyuncs.com/banner/2211745565067_.pic.jpg" alt="团队成员" class="team-img">
         </div>
         <h3>刘工</h3>
         <p class="team-title">前端开发</p>
@@ -186,7 +193,7 @@ onMounted(() => {
 
       <div class="team-card">
         <div class="team-image">
-          <img src="https://picsum.photos/300/300?random=6" alt="团队成员" class="team-img">
+          <img src="https://nuecount.oss-cn-guangzhou.aliyuncs.com/banner/2201745565065_.pic.jpg" alt="团队成员" class="team-img">
         </div>
         <h3>韩工</h3>
         <p class="team-title">后端开发</p>
@@ -202,21 +209,20 @@ onMounted(() => {
       <section class="case-section">
         <div class="case-container">
           <h2 class="section-title">NueMind 双子星</h2>
-          <p class="section-subtitle">探索NueMind融入的Ai如何改变行业，创造价值; 为尾帧工作室NueCount提供技术支持</p>
+          <p class="section-subtitle">探索NueMind融入的Ai如何改变行业，创造价值;</p>
 
           <div class="case-content" style="margin-bottom: 3rem;">
             <div class="case-image">
               <img src="../assets/IMG_8110.jpg" alt="AI应用案例" class="case-img">
             </div>
             <div class="case-text">
-              <h3>智能客服系统</h3>
-              <p>基于自然语言处理技术，我们的智能客服系统能够实时理解用户问题并提供精准解答，平均响应时间缩短至1秒以内，客户满意度提升至95%以上。</p>
+              <h3>智能销售客服 Alice </h3>
+              <p>基于自然语言处理技术，我们的智能销售客服系统 Alice 能够实时理解用户意图并提供精准解答。系统性能与优势如下：</p>
               <ul class="case-features">
-                <li>多轮对话支持</li>
-                <li>情绪感知分析</li>
-                <li>知识图谱驱动</li>
+                <li>全局知识图谱驱动：智能客服 Alice 内置系统级知识图谱，可在毫秒级检索课程、教资及相关资源，确保第一时间提供精准答复。</li>
+                <li>拟人化语气：采用亲切、自然的交流风格，让客户感受如同与真人客服对话。</li>
+                <li>全天候智能答疑：7×24 小时在线，毫秒级响应，实时消除学生选课疑虑，提升决策效率与满意度。</li>
               </ul>
-              <a href="#" class="case-link">点击了解更多 →</a>
             </div>
           </div>
 
@@ -226,13 +232,12 @@ onMounted(() => {
             </div>
             <div class="case-text">
               <h3>智能教学管家系统</h3>
-              <p>基于多模态AI引擎与自然语言处理技术，NueMind智能教学管家实现教育场景的全链路数字化重构。系统通过：</p>
+              <p>基于先进的多模态 AI 引擎，结合自然语言处理与计算机视觉技术，NueMind 智能教学管家实现了教育场景的全链路数字化重构。系统优势如下：</p>
               <ul class="case-features">
-                <li>文档智能解析引擎：支持PDF/Word等多格式教材的语义解构，自动生成标准化知识元数据</li>
-                <li>教学行为建模：运用LSTM时序网络分析200+维度教学特征，提供精准教学策略建议</li>
-                <li>学习状态感知：结合眼动追踪与语音情感分析，实时构建学习者认知画像</li>
+                <li>自动化批改：支持 Word 文档格式的试卷与练习自动批改，覆盖主流校园期末考试题型，大幅减轻教师批改负担。</li>
+                <li>全天候个性化反馈：依托强大的多模态模型，系统 24 小时在线，为学生提供实时学习诊断与指导，帮助其随时掌握自身学习进度。</li>
+                <li>高效教学管理：为教师提供便捷的学生管理工具，支持成绩统计、学习报告生成与班级成长分析，提升教学组织效率。</li>
               </ul>
-              <a href="#" class="case-link">点击了解更多 →</a>
             </div>
           </div>
 

@@ -1,20 +1,20 @@
 <template>
-  <div class="video-page">
-    <div class="video-description">
-      <h2>编写一个用户登录的GUI程序界面</h2>
-    </div>
-    <iframe width="900px" height="500" :src="videoUrl"
+    <div class="video-page">
+        <div class="video-description">
+            <h2>C语言基础语法</h2>
+        </div>
+        <p></p>
+        <iframe width="900px" height="500" :src="videoUrl"
       title="YouTube video player" frameborder="0"
       loading="lazy"
       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
       referrerpolicy="strict-origin-when-cross-origin" allowfullscreen>
     </iframe>
-    <br>
-  </div>
+    </div>
 </template>
 <script>
 export default {
-  name: 'VideoPage3',
+  name: 'VideoPage6',
   props: ['videoUrl'],
 }
 </script>
@@ -41,5 +41,3 @@ export default {
   line-height: 1.6;
   color: #343a40;
 }</style>
-
-

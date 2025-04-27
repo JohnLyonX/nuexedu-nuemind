@@ -54,7 +54,7 @@ const goToCourseDetail = (id) => {
     </div>
     <div class="course-content">
       <h3 class="course-title">{{ name }}</h3>
-      <p class="course-description">{{ description }}</p>
+      <p class="course-description" v-html="description"></p>
       <div class="course-footer">
         <span class="course-price">{{ formatPrice(price) }}</span>
         <span class="course-link">了解更多</span>
@@ -144,15 +144,15 @@ const goToCourseDetail = (id) => {
   .course-image {
     height: 160px;
   }
-  
+
   .course-content {
     padding: 15px;
   }
-  
+
   .course-title {
     font-size: 16px;
   }
-  
+
   .course-price {
     font-size: 16px;
   }
@@ -162,11 +162,11 @@ const goToCourseDetail = (id) => {
   .course-image {
     height: 140px;
   }
-  
+
   .course-content {
     padding: 12px;
   }
-  
+
   .course-price {
     font-size: 15px;
   }
@@ -177,15 +177,15 @@ const goToCourseDetail = (id) => {
   .course-card {
     background-color: #2d2d2d;
   }
-  
+
   .course-title {
     color: #e0e0e0;
   }
-  
+
   .course-description {
     color: #aaaaaa;
   }
-  
+
   .course-link {
     color: #64b5f6;
   }

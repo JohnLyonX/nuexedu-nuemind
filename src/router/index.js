@@ -5,12 +5,13 @@ import ProfileView from '../views/profile/ProfileView.vue'
 import UserAssistantChat from '../views/profile/UserAssistantChat.vue'
 import CourseStady from '@/views/course/CourseStady.vue'
 import Login from '@/views/login/LoginPage.vue'
+
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
       path: '/',
-      redirect: '/login'
+      redirect: '/home'
     },
     {
       path: '/login',
@@ -28,9 +29,9 @@ const router = createRouter({
       component: CourseDetail
     },
     {
-      path: '/coursestady',
-      name: 'coursestady',
-      component: CourseStady
+      path: '/courseStudy/:courseId',
+      name: 'CourseStudy',
+      component: () => import('@/views/course/CourseStady.vue')
     },
     {
       path: '/profile',
@@ -54,7 +55,21 @@ const router = createRouter({
         {
           path: 'exams',
           name: 'exams',
-          component: () => import('../views/profile/UserExams.vue')
+          component: () => import('../views/profile/UserExams.vue'),
+        },
+        {
+          path: 'exams/:examId',
+          name: 'ExamPage',
+          component: () => import('../views/course/videopage/ExamPage.vue'),
+          props: (route) => ({
+            examId: route.params.examId,
+            fileUrl: route.query.fileUrl,
+            correctPath: route.query.correctPath,
+            subPath: route.query.subPath,
+            title: route.query.title,
+            courseName: route.query.courseName || null ,
+
+          })
         },
         {
           path: 'assistant',
@@ -66,7 +81,7 @@ const router = createRouter({
           name: 'chat',
           component: UserAssistantChat
         },
-      
+
       ]
     },
     // {
@@ -78,6 +93,18 @@ const router = createRouter({
     //   component: () => import('../views/AboutView.vue'),
     // },
   ],
+})
+
+// 添加全局前置守卫
+router.beforeEach((to, from, next) => {
+  const hasToken = localStorage.getItem('token');
+  const publicPaths = ['/login', '/home']; // 添加免拦截的路由
+
+  if (!publicPaths.includes(to.path) && !hasToken) {
+    next('/login');
+  } else {
+    next();
+  }
 })
 
 export default router

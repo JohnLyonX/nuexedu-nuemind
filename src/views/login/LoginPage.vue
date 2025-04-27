@@ -15,6 +15,23 @@
             <label for="password" class="form-label">密码</label>
             <input v-model="form.password" type="password" class="form-control">
           </div>
+          <div class="mb-3 d-flex align-items-center gap-2">
+            <input 
+              v-model="form.code"
+              type="text"
+              class="form-control flex-grow-1"
+              placeholder="验证码"
+              @keyup.enter.native="handleLogin"
+            >
+            <div class="login-code-img-wrap flex-shrink-0">
+              <img 
+                :src="codeUrl" 
+                @click="getCode"
+                class="login-code-img"
+                style="height: 38px; cursor: pointer"
+              >
+            </div>
+          </div>
           <div class="btn-container">
             <button type="submit" class="btn btn-primary">登 录</button>
           </div>
@@ -23,51 +40,92 @@
     </div>
   </template>
   
-  <script setup>
-  import { ref } from 'vue'
+<script setup>
+  import { ref, onMounted } from 'vue'
   import { useRouter } from 'vue-router'
-  import axios from 'axios'
   import TypingEffect from '@/components/TypingEffect.vue'
-
+  import request from '@/utils/request'
   const router = useRouter()
-//   {username: 'itheima007', password: '7654321'}
+  const codeUrl=ref('')
+  const captchaEnabled = ref(true)
   const form = ref({
-    username: '',
-    password: ''
+    username: '19838472634',
+    password: 'admin123123',
+    rememberMe: false,
+    code: "",
+    uuid: ""
   })
-  
+  // 获取验证码
+  const getCodeImg = async () => {
+    try {
+      const response = await request.get('captchaImage')
+      codeUrl.value = "data:image/gif;base64," + response.data.img
+      form.value.uuid = response.data.uuid
+      captchaEnabled.value = response.data.captchaEnabled !== false
+    } catch (error) {
+      console.error('获取验证码失败:', error)
+    }
+  }
+  onMounted(() => {
+    getCodeImg()
+  })
+
+
   const showAlert = ref(false)
   const alertMessage = ref('')
   const alertClass = ref('')
-  
-  const handleLogin = async () => {
+
+   const handleLogin = async () => {
     // 验证逻辑
-    if (form.value.username.length < 8) {
-      showAlertFn('用户名必须大于等于8位', false)
+    if (form.value.username.length < 3) {
+      showAlertFn('用户名必须大于等于3位', false)
       return
     }
     if (form.value.password.length < 6) {
       showAlertFn('密码必须大于等于6位', false)
       return
     }
-  
+    // 张三
+    // 19838472634
+    // admin123123
+    // 梁展波
+    // 13345678910
+    // 123456
     try {
-      const response = await axios.post('http://hmajax.itheima.net/api/login', {
+      localStorage.removeItem('token')
+      const response = await request.post('login', {
         username: form.value.username,
-        password: form.value.password
+        password: form.value.password,
+        code: form.value.code,
+        uuid: form.value.uuid
       })
       
-      showAlertFn(response.data.message, true)
-      localStorage.setItem('token', 'your-token-here'); // 存储 token
+      if (response.data.code !== 200) {
+      throw new Error(response.data.msg || '登录失败');
+      }
+      // 提取 token 和 userId
+    const token = response.data.token || response.data.data?.token;
+    const userId = response.data.userId; 
+    if (!token) throw new Error('Token缺失');
+      
+    // 存储token
+      localStorage.setItem('token', token)
+      localStorage.setItem('username', form.value.username);
+      if (userId) {
+        localStorage.setItem('userId', userId);
+      } else {
+        console.warn('未获取到用户ID');
+      }
+      showAlertFn('登录成功', true)
       // 登录成功跳转
       router.push('/home')
 
     } catch (error) {
-        router.push('/home')
-        localStorage.setItem('token', 'your-token-here');
-        // 
-      showAlertFn(error.response.data.message, false)
-    
+        // 登录失败时刷新验证码
+        getCodeImg()
+        form.value.code = ""
+        const msg = (error.response && error.response.data && error.response.data.msg) || error.message;
+        showAlertFn(msg, false);
     }
   }
   
@@ -79,7 +137,7 @@
       showAlert.value = false
     }, 2000)
   }
-  </script>
+</script>
   <style>
    .container-login {
     background-color: #EDF0F5;
@@ -157,18 +215,56 @@
     opacity: 1;
   }
 
-  @media (max-width: 576px) {
+@media (max-width: 768px) {
   .container-login {
-    width: 90%;
-    padding: 30px;
+    padding: 2rem 1rem;
+  }
+  .form_wrap {
+    max-width: 100%;
+    width: 100%;
+  }
+  .login-code-img-wrap {
+    margin-top: 0.5rem;
+    flex-basis: 100%;
+  }
+  .login-code-img {
+    width: 100%;
+    height: auto;
+  }
+  .welcome-title {
+    font-size: 2.5rem;
   }
 }
 
+@media (max-width: 576px) {
+  .container-login {
+    padding: 1.5rem;
+  }
+  .form-control {
+    font-size: 0.9rem;
+  }
+  .btn-primary {
+    width: 100%;
+    font-size: 0.9rem;
+  }
+  .alert {
+    margin-bottom: 1rem;
+    padding: 0.5rem 1rem;
+  }
+}
 .welcome-title {
-  font-size: 1.5rem;
+  font-size: 3.5rem;
   font-weight: 900;
   margin-bottom: 1.5rem;
   min-height: 2em;
   color: #1a1a1a;
+}
+.login-code-img {
+  border-radius: 6px;
+  border: 1px solid #e0e3eb;
+}
+
+.login-code-img:hover {
+  filter: brightness(0.98);
 }
 </style>

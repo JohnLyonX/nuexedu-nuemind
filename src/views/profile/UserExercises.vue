@@ -30,7 +30,7 @@ const fetchExercises = async () => {
           completedQuestions: 15,
           score: 85,
           status: 'in_progress',
-          submissionTime: '2023-05-15 14:30'
+          submissionTime: '2025-05-15 14:30'
         },
         {
           id: 2,
@@ -49,6 +49,9 @@ const fetchExercises = async () => {
     error.value = '获取练习数据失败，请稍后重试'
     loading.value = false
     console.error('获取练习数据失败:', err)
+  } finally {
+    loading.value = false
+    window.scrollTo(0, 0) // 新增：数据加载完成后滚动到顶部
   }
 }
 

@@ -1,5 +1,10 @@
 <script setup>
 import AiChatComponent from '@/components/AiChatComponent.vue';
+import { onMounted } from 'vue';
+
+onMounted(() => {
+  window.scrollTo(0, 0);
+});
 
 </script>
 
